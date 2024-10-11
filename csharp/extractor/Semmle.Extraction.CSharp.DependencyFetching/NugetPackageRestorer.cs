@@ -369,21 +369,12 @@ namespace Semmle.Extraction.CSharp.DependencyFetching
 
         private string? CreateFallbackNugetConfig(IEnumerable<string> fallbackNugetFeeds, string folderPath)
         {
-            var sb = new StringBuilder();
-            fallbackNugetFeeds.ForEach((feed, index) => sb.AppendLine($"<add key=\"feed{index}\" value=\"{feed}\" />"));
+            NugetConfig config = new NugetConfig();
+            fallbackNugetFeeds.ForEach((feed, index) => config.Feeds.Append(new(feed)));
 
             var nugetConfigPath = Path.Combine(folderPath, "nuget.config");
             logger.LogInfo($"Creating fallback nuget.config file {nugetConfigPath}.");
-            File.WriteAllText(nugetConfigPath,
-                $"""
-                <?xml version="1.0" encoding="utf-8"?>
-                <configuration>
-                    <packageSources>
-                        <clear />
-                {sb}
-                    </packageSources>
-                </configuration>
-                """);
+            config.Write(nugetConfigPath);
 
             return nugetConfigPath;
         }
@@ -747,6 +738,15 @@ namespace Semmle.Extraction.CSharp.DependencyFetching
                 .ToHashSet();
 
             logger.LogInfo($"Found {allFeeds.Count} Nuget feeds (with inherited ones) in nuget.config files: {string.Join(", ", allFeeds.OrderBy(f => f))}");
+
+            var proxyHost = Environment.GetEnvironmentVariable("CODEQL_PROXY_HOST");
+            var proxyPort = Environment.GetEnvironmentVariable("CODEQL_PROXY_PORT");
+            if (!string.IsNullOrWhiteSpace(proxyHost) && !string.IsNullOrWhiteSpace(proxyPort))
+            {
+                var proxyFeed = $"https://{proxyHost}:{proxyPort}/index.json";
+                logger.LogInfo($"Added private registry proxy feed at ${proxyFeed}");
+                explicitFeeds.Add(proxyFeed);
+            }
 
             return (explicitFeeds, allFeeds);
         }
